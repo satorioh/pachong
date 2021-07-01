@@ -5,6 +5,9 @@ const client = redis.createClient("6379", "127.0.0.1");
 const llenAsync = promisify(client.llen).bind(client);
 const lpopAsync = promisify(client.lpop).bind(client);
 const requestId = require("../getURL/worker");
+const addPost = require("./db");
+
+let timer = null;
 
 class Consumer extends EventEmitter {
   constructor() {
@@ -32,9 +35,20 @@ consumer.on("begin", async function () {
   this.status = "begin";
   while (true) {
     const id = await lpopAsync("mqTest");
-    await requestId(id);
-    if (this.status === "pause") break;
+    if (!id) {
+      this.emit("stop");
+      break;
+    } else {
+      const post = await requestId(id);
+      await addPost(post);
+      if (this.status === "pause") break;
+    }
   }
+});
+
+consumer.on("stop", async function () {
+  clearInterval(timer);
+  console.log(process.pid + " consumer stop");
 });
 
 async function getListLength() {
@@ -48,4 +62,4 @@ async function getListLength() {
 }
 
 consumer.emit("begin");
-setInterval(getListLength, 5000);
+timer = setInterval(getListLength, 5000);
